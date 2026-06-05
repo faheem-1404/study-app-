@@ -6,6 +6,14 @@ import '../models/redemption_request.dart';
 import '../models/user_profile.dart';
 
 class AppStorageService {
+  static final AppStorageService _instance = AppStorageService._internal();
+
+  factory AppStorageService() {
+    return _instance;
+  }
+
+  AppStorageService._internal();
+
   static const String _profileKey = 'studyearn.profile';
   static const String _creditsKey = 'studyearn.credits';
   static const String _todaySecondsKey = 'studyearn.todaySeconds';
