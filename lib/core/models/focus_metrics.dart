@@ -1,4 +1,6 @@
-/// Represents focus detection metrics captured from face analysis
+import 'dart:ui';
+
+/// Represents focus detection metrics captured from face and object analysis
 class FocusMetrics {
   const FocusMetrics({
     required this.focusScore,
@@ -9,6 +11,16 @@ class FocusMetrics {
     required this.headPitchAngle,
     this.eyesClosedDuration = Duration.zero,
     this.faceMissingDuration = Duration.zero,
+    
+    // Upgraded ML detection fields
+    this.multipleFaces = false,
+    this.phoneDetected = false,
+    this.bookDetected = false,
+    this.laptopDetected = false,
+    this.leavingChair = false,
+    this.slouching = false,
+    this.headYaw = 0.0,
+    this.headRoll = 0.0,
   });
 
   /// Overall focus score (0-100)
@@ -35,6 +47,16 @@ class FocusMetrics {
   /// Duration face has been missing
   final Duration faceMissingDuration;
 
+  // Upgraded ML detection fields
+  final bool multipleFaces;
+  final bool phoneDetected;
+  final bool bookDetected;
+  final bool laptopDetected;
+  final bool leavingChair;
+  final bool slouching;
+  final double headYaw;
+  final double headRoll;
+
   /// Whether user is considered focused (score > 60)
   bool get isFocused => focusScore > 60;
 
@@ -53,6 +75,14 @@ class FocusMetrics {
     double? headPitchAngle,
     Duration? eyesClosedDuration,
     Duration? faceMissingDuration,
+    bool? multipleFaces,
+    bool? phoneDetected,
+    bool? bookDetected,
+    bool? laptopDetected,
+    bool? leavingChair,
+    bool? slouching,
+    double? headYaw,
+    double? headRoll,
   }) {
     return FocusMetrics(
       focusScore: focusScore ?? this.focusScore,
@@ -63,6 +93,14 @@ class FocusMetrics {
       headPitchAngle: headPitchAngle ?? this.headPitchAngle,
       eyesClosedDuration: eyesClosedDuration ?? this.eyesClosedDuration,
       faceMissingDuration: faceMissingDuration ?? this.faceMissingDuration,
+      multipleFaces: multipleFaces ?? this.multipleFaces,
+      phoneDetected: phoneDetected ?? this.phoneDetected,
+      bookDetected: bookDetected ?? this.bookDetected,
+      laptopDetected: laptopDetected ?? this.laptopDetected,
+      leavingChair: leavingChair ?? this.leavingChair,
+      slouching: slouching ?? this.slouching,
+      headYaw: headYaw ?? this.headYaw,
+      headRoll: headRoll ?? this.headRoll,
     );
   }
 }

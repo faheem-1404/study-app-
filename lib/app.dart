@@ -1,95 +1,46 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'core/services/app_storage_service.dart';
-import 'core/services/face_detection_service.dart';
-import 'core/services/mlkit_face_detection_service.dart';
 import 'core/theme/app_theme.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
-import 'features/auth/viewmodels/auth_view_model.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/shared/widgets/phone_frame_wrapper.dart';
-import 'features/study/viewmodels/study_view_model.dart';
-import 'features/wallet/viewmodels/wallet_view_model.dart';
 
-class StudyEarnApp extends StatefulWidget {
-  const StudyEarnApp({super.key, required this.storage});
-
-  final AppStorageService storage;
-
-  @override
-  State<StudyEarnApp> createState() => _StudyEarnAppState();
-}
-
-class _StudyEarnAppState extends State<StudyEarnApp> {
-  late final FaceDetectionService _faceDetectionService;
-
-  @override
-  void initState() {
-    super.initState();
-    _faceDetectionService = MlKitFaceDetectionService();
-  }
-
-  @override
-  void dispose() {
-    _faceDetectionService.dispose();
-    super.dispose();
-  }
+class StudyEarnApp extends StatelessWidget {
+  const StudyEarnApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final AppStorageService storage = widget.storage;
-
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AuthViewModel>(
-          create: (_) => AuthViewModel(storage)..loadProfile(),
-        ),
-        ChangeNotifierProvider<WalletViewModel>(
-          create: (_) => WalletViewModel(storage)..loadWallet(),
-        ),
-        Provider<FaceDetectionService>.value(value: _faceDetectionService),
-        ChangeNotifierProxyProvider<FaceDetectionService, StudyViewModel>(
-          create: (context) => StudyViewModel(
-            faceDetectionService: context.read<FaceDetectionService>(),
-          ),
-          update: (context, service, previous) => previous ?? StudyViewModel(
-            faceDetectionService: service,
-          ),
-        ),
-      ],
-      child: PhoneFrameWrapper(
-        child: MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'StudyEarn',
-          theme: AppTheme.lightTheme,
-          darkTheme: AppTheme.darkTheme,
-          themeMode: ThemeMode.system,
-          home: const AppGate(),
-        ),
+    return PhoneFrameWrapper(
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'StudyEarn',
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system,
+        home: const AppGate(),
       ),
     );
   }
 }
 
-class AppGate extends StatelessWidget {
+class AppGate extends ConsumerWidget {
   const AppGate({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<AuthViewModel>(
-      builder: (context, authViewModel, _) {
-        if (authViewModel.isLoading) {
-          return const _SplashScreen();
-        }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
 
-        if (!authViewModel.isLoggedIn) {
-          return const LoginScreen();
-        }
+    if (authState.isLoading) {
+      return const _SplashScreen();
+    }
 
-        return const HomeScreen();
-      },
-    );
+    if (!authState.isLoggedIn) {
+      return const LoginScreen();
+    }
+
+    return const HomeScreen();
   }
 }
 

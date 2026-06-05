@@ -1,20 +1,20 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
 import '../../../core/models/wallet_transaction.dart';
-import '../viewmodels/wallet_view_model.dart';
+import '../presentation/providers/wallet_provider.dart';
 import 'withdraw_screen.dart';
 
-class WalletScreen extends StatefulWidget {
+class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
 
   @override
-  State<WalletScreen> createState() => _WalletScreenState();
+  ConsumerState<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _WalletScreenState extends State<WalletScreen>
+class _WalletScreenState extends ConsumerState<WalletScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _cardAnim;
   late Animation<double> _cardFloat;
@@ -55,132 +55,127 @@ class _WalletScreenState extends State<WalletScreen>
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final walletState = ref.watch(walletControllerProvider);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF2F4F8),
-      body: Consumer<WalletViewModel>(
-        builder: (context, wallet, _) {
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // ── App Bar ──────────────────────────────────────────────────
-              SliverAppBar(
-                pinned: true,
-                expandedHeight: 60,
-                backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF2F4F8),
-                foregroundColor: isDark ? Colors.white : const Color(0xFF1A1A2E),
-                elevation: 0,
-                title: const Text(
-                  'My Wallet',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
-                ),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.history_rounded),
-                    tooltip: 'Transaction history',
-                    onPressed: () {},
-                  ),
-                ],
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // ── App Bar ──────────────────────────────────────────────────
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 60,
+            backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF2F4F8),
+            foregroundColor: isDark ? Colors.white : const Color(0xFF1A1A2E),
+            elevation: 0,
+            title: const Text(
+              'My Wallet',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.history_rounded),
+                tooltip: 'Transaction history',
+                onPressed: () {},
               ),
+            ],
+          ),
 
-              // ── Animated Wallet Card ──────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                  child: AnimatedBuilder(
-                    animation: _cardAnim,
-                    builder: (context, child) {
-                      return Transform.translate(
-                        offset: Offset(0, _cardFloat.value),
-                        child: child,
-                      );
-                    },
-                    child: _AnimatedWalletCard(
-                      balanceInr: wallet.balanceInr,
-                      credits: wallet.credits,
-                      shimmerAnim: _shimmer,
+          // ── Animated Wallet Card ──────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: AnimatedBuilder(
+                animation: _cardAnim,
+                builder: (context, child) {
+                  return Transform.translate(
+                    offset: Offset(0, _cardFloat.value),
+                    child: child,
+                  );
+                },
+                child: _AnimatedWalletCard(
+                  balanceInr: walletState.balanceInr,
+                  credits: walletState.credits,
+                  shimmerAnim: _shimmer,
+                ),
+              ),
+            ),
+          ),
+
+          // ── Earnings Summary ──────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: _EarningsSummaryRow(wallet: walletState),
+            ),
+          ),
+
+          // ── Pending Banner ────────────────────────────────────────────
+          if (walletState.pendingWithdrawals > 0)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: _PendingBanner(count: walletState.pendingWithdrawals),
+              ),
+            ),
+
+          // ── Transaction History ───────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Transactions',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A2E),
                     ),
                   ),
-                ),
-              ),
-
-              // ── Earnings Summary ──────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  child: _EarningsSummaryRow(wallet: wallet),
-                ),
-              ),
-
-              // ── Pending Banner ────────────────────────────────────────────
-              if (wallet.pendingWithdrawals > 0)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                    child: _PendingBanner(count: wallet.pendingWithdrawals),
-                  ),
-                ),
-
-              // ── Transaction History ───────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Transactions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: isDark ? Colors.white : const Color(0xFF1A1A2E),
-                        ),
+                  const Spacer(),
+                  if (walletState.transactions.isNotEmpty)
+                    Text(
+                      '${walletState.transactions.length} total',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.white38 : Colors.black38,
                       ),
-                      const Spacer(),
-                      if (wallet.transactions.isNotEmpty)
-                        Text(
-                          '${wallet.transactions.length} total',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.white38 : Colors.black38,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                    ),
+                ],
               ),
+            ),
+          ),
 
-              if (wallet.transactions.isEmpty)
-                SliverToBoxAdapter(
-                  child: _EmptyTransactions(isDark: isDark),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final tx = wallet.transactions[index];
-                      return Padding(
-                        padding: EdgeInsets.fromLTRB(
-                          20, 0, 20, index == wallet.transactions.length - 1 ? 100 : 12,
-                        ),
-                        child: _TransactionTile(tx: tx, isDark: isDark),
-                      );
-                    },
-                    childCount: wallet.transactions.length,
-                  ),
-                ),
-            ],
-          );
-        },
+          if (walletState.transactions.isEmpty)
+            SliverToBoxAdapter(
+              child: _EmptyTransactions(isDark: isDark),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final tx = walletState.transactions[index];
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      20, 0, 20, index == walletState.transactions.length - 1 ? 100 : 12,
+                    ),
+                    child: _TransactionTile(tx: tx, isDark: isDark),
+                  );
+                },
+                childCount: walletState.transactions.length,
+              ),
+            ),
+        ],
       ),
 
       // ── Withdraw FAB ───────────────────────────────────────────────────
-      floatingActionButton: Consumer<WalletViewModel>(
-        builder: (context, wallet, _) => _WithdrawFab(
-          enabled: wallet.balanceInr >= 1.0,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const WithdrawScreen(),
-            ),
+      floatingActionButton: _WithdrawFab(
+        enabled: walletState.balanceInr >= 1.0,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => const WithdrawScreen(),
           ),
         ),
       ),
@@ -346,7 +341,7 @@ class _AnimatedWalletCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _EarningsSummaryRow extends StatelessWidget {
   const _EarningsSummaryRow({required this.wallet});
-  final WalletViewModel wallet;
+  final WalletState wallet;
 
   @override
   Widget build(BuildContext context) {

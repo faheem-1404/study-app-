@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/redemption_request.dart';
 import '../../../core/models/payout_method.dart';
 import '../../shared/widgets/status_timeline.dart';
-import '../../wallet/viewmodels/wallet_view_model.dart';
+import '../presentation/providers/wallet_provider.dart';
 
-class RedemptionReceiptScreen extends StatelessWidget {
+class RedemptionReceiptScreen extends ConsumerWidget {
   const RedemptionReceiptScreen({super.key, required this.request});
 
   final RedemptionRequest request;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
@@ -70,13 +70,13 @@ class RedemptionReceiptScreen extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            Consumer<WalletViewModel>(builder: (context, wallet, _) {
+            Builder(builder: (context) {
               final bool canComplete = request.status != RedemptionStatus.completed;
               return FilledButton(
                 onPressed: canComplete
                     ? () async {
                         // For the mock demo allow marking completed
-                        await wallet.updateRedemptionStatus(request.id, RedemptionStatus.completed);
+                        await ref.read(walletControllerProvider.notifier).updateRedemptionStatus(request.id, RedemptionStatus.completed);
                         Navigator.of(context).pop();
                       }
                     : null,

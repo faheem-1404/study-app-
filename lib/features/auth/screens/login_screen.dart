@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../viewmodels/auth_view_model.dart';
+import '../presentation/providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _collegeController = TextEditingController();
@@ -33,7 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _isSubmitting = true;
     });
 
-    await context.read<AuthViewModel>().saveProfile(
+    await ref.read(authControllerProvider.notifier).login(
           name: _nameController.text.trim(),
           college: _collegeController.text.trim(),
         );

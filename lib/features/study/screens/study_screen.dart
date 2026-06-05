@@ -1,34 +1,37 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/focus_sound.dart';
+import '../../../core/models/focus_metrics.dart';
 import '../../../core/models/study_session_summary.dart';
 import '../../../core/services/focus_audio_service.dart';
-import '../viewmodels/study_view_model.dart';
+import '../../shared/widgets/metric_card.dart';
+import '../presentation/providers/study_provider.dart';
+import '../../../data/services/simulated_ml_service.dart';
 import 'study_result_screen.dart';
 
-class StudyScreen extends StatefulWidget {
+class StudyScreen extends ConsumerStatefulWidget {
   const StudyScreen({super.key});
 
   @override
-  State<StudyScreen> createState() => _StudyScreenState();
+  ConsumerState<StudyScreen> createState() => _StudyScreenState();
 }
 
-class _StudyScreenState extends State<StudyScreen>
+class _StudyScreenState extends ConsumerState<StudyScreen>
     with SingleTickerProviderStateMixin {
-  late final StudyViewModel _vm;
   bool _cameraPermissionGranted = false;
   bool _isPreparing = true;
-  bool _isListenerAttached = false;
   bool _sessionStarted = false;
   bool _showAudioPanel = false;
+  bool _showDevPanel = true; // Show simulation panel by default on web/sim
   final ValueNotifier<int> _minutesNotifier =
       ValueNotifier<int>(AppConstants.defaultStudyMinutes);
 
@@ -38,7 +41,6 @@ class _StudyScreenState extends State<StudyScreen>
   @override
   void initState() {
     super.initState();
-    _vm = context.read<StudyViewModel>();
     _panelAnim = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
@@ -51,7 +53,6 @@ class _StudyScreenState extends State<StudyScreen>
 
   @override
   void dispose() {
-    if (_isListenerAttached) _vm.removeListener(_handleStudyUpdate);
     _minutesNotifier.dispose();
     _panelAnim.dispose();
     super.dispose();
@@ -65,29 +66,17 @@ class _StudyScreenState extends State<StudyScreen>
       setState(() => _isPreparing = false);
       return;
     }
-    if (!_isListenerAttached) {
-      _vm.addListener(_handleStudyUpdate);
-      _isListenerAttached = true;
-    }
+
     try {
-      await _vm.initializeCamera();
+      await ref.read(studyControllerProvider.notifier).initializeCamera();
     } finally {
       if (mounted) setState(() => _isPreparing = false);
     }
   }
 
-  void _handleStudyUpdate() {
-    final StudySessionSummary? summary = _vm.latestSummary;
-    if (summary == null || !mounted) return;
-    _vm.clearLatestSummary();
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-          builder: (_) => StudyResultScreen(summary: summary)),
-    );
-  }
-
   Future<bool> _onWillPop() async {
-    if (!_vm.isSessionActive) return true;
+    final studyState = ref.read(studyControllerProvider);
+    if (!studyState.sessionActive) return true;
     final bool? leave = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -100,18 +89,22 @@ class _StudyScreenState extends State<StudyScreen>
               child: const Text('Stay')),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Leave')),
         ],
       ),
     );
-    if (leave == true) await _vm.cancelSession();
+    if (leave == true) {
+      await ref.read(studyControllerProvider.notifier).cancelSession();
+      return true;
+    }
     return false;
   }
 
   String _fmt(int s) =>
       '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
 
-  void _togglePanel() {
+  void _toggleAudioPanel() {
     setState(() => _showAudioPanel = !_showAudioPanel);
     if (_showAudioPanel) {
       _panelAnim.forward();
@@ -125,15 +118,30 @@ class _StudyScreenState extends State<StudyScreen>
     const Color gold = Color(0xFFD4AF37);
     const Color darkBg = Color(0xFF0D0D0D);
     const Color green = Color(0xFF4CAF50);
+    
+    final studyState = ref.watch(studyControllerProvider);
+
+    // Listen for session result and redirect to summary screen
+    ref.listen<StudyState>(studyControllerProvider, (previous, next) {
+      if (next.latestSummary != null) {
+        final summary = next.latestSummary!;
+        ref.read(studyControllerProvider.notifier).clearLatestSummary();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(
+            builder: (_) => StudyResultScreen(summary: summary),
+          ),
+        );
+      }
+    });
 
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
         backgroundColor: darkBg,
-        body: Consumer<StudyViewModel>(
-          builder: (context, vm, _) {
+        body: Builder(
+          builder: (context) {
             if (_isPreparing) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator(color: gold));
             }
 
             if (!_cameraPermissionGranted) {
@@ -156,16 +164,16 @@ class _StudyScreenState extends State<StudyScreen>
 
             if (!_sessionStarted) {
               return _PreSessionPanel(
-                vm: vm,
+                state: studyState,
                 minutesNotifier: _minutesNotifier,
                 onStartSession: () async {
                   setState(() => _sessionStarted = true);
-                  await vm.startSession(minutes: _minutesNotifier.value);
+                  await ref.read(studyControllerProvider.notifier).startSession(minutes: _minutesNotifier.value);
                 },
               );
             }
 
-            final CameraController? ctrl = vm.cameraController;
+            final CameraController? ctrl = ref.read(studyControllerProvider.notifier).cameraController;
             final bool ready = ctrl != null && ctrl.value.isInitialized;
 
             if (!ready) {
@@ -176,13 +184,13 @@ class _StudyScreenState extends State<StudyScreen>
                     const Icon(Icons.error_outline,
                         color: Colors.red, size: 48),
                     const SizedBox(height: 16),
-                    Text(vm.statusMessage,
+                    Text(studyState.statusMessage,
                         style: const TextStyle(color: Colors.white),
                         textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     FilledButton(
                       onPressed: () async {
-                        await vm.cancelSession();
+                        await ref.read(studyControllerProvider.notifier).cancelSession();
                         if (mounted) setState(() => _sessionStarted = false);
                       },
                       child: const Text('Go Back'),
@@ -192,104 +200,382 @@ class _StudyScreenState extends State<StudyScreen>
               );
             }
 
-            final bool isFocused = vm.focusScore > 60;
+            final bool isFocused = studyState.focusScore > 50;
 
-            return GestureDetector(
-              onTap: () {
-                if (_showAudioPanel) {
-                  setState(() => _showAudioPanel = false);
-                  _panelAnim.reverse();
-                }
-              },
-              child: Stack(
-                children: [
-                  // ── Camera preview ──────────────────────────────────────
-                  SizedBox.expand(child: CameraPreview(ctrl!)),
+            return Stack(
+              children: [
+                // ── Camera preview ──────────────────────────────────────
+                SizedBox.expand(child: CameraPreview(ctrl)),
 
-                  // ── Focus glow border ───────────────────────────────────
-                  if (isFocused)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                              color: green.withOpacity(0.35),
-                              width: 2,
-                            ),
+                // ── Face Mesh and Bounding Box Canvas Painter Overlay ────
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _MlOverlayPainter(metrics: studyState.currentFocusMetrics),
+                    ),
+                  ),
+                ),
+
+                // ── Focus glow border ───────────────────────────────────
+                if (isFocused)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: green.withValues(alpha: 0.35),
+                            width: 3,
                           ),
                         ),
                       ),
                     ),
-
-                  // ── Top-right HUD ───────────────────────────────────────
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: _HudOverlay(
-                      time: _fmt(vm.remainingSeconds),
-                      focusPct: (vm.focusPercentage * 100).toInt(),
-                      credits: vm.focusedSeconds ~/ 60,
-                    ),
                   ),
 
-                  // ── Bottom-right: 🎧 Audio button ───────────────────────
-                  Positioned(
-                    bottom: 16,
-                    right: 16,
-                    child: _AudioFab(
-                      audioService: vm.audioService,
-                      onTap: _togglePanel,
-                    ),
+                // ── Top-right HUD ───────────────────────────────────────
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: _HudOverlay(
+                    time: _fmt(studyState.remainingSeconds),
+                    focusPct: studyState.focusScore,
+                    credits: studyState.focusedSeconds ~/ 60,
                   ),
+                ),
 
-                  // ── Audio panel (glass) ─────────────────────────────────
-                  if (_showAudioPanel)
-                    Positioned(
-                      bottom: 72,
-                      right: 16,
-                      child: FadeTransition(
-                        opacity: _panelFade,
-                        child: _AudioPanel(
-                          audioService: vm.audioService,
-                          onChanged: () => setState(() {}),
-                        ),
+                // ── Bottom-right: 🎧 Audio button ───────────────────────
+                Positioned(
+                  bottom: 16,
+                  right: 16,
+                  child: _AudioFab(
+                    audioService: ref.read(studyControllerProvider.notifier).audioService,
+                    onTap: _toggleAudioPanel,
+                  ),
+                ),
+
+                // ── Audio panel (glass) ─────────────────────────────────
+                if (_showAudioPanel)
+                  Positioned(
+                    bottom: 72,
+                    right: 16,
+                    child: FadeTransition(
+                      opacity: _panelFade,
+                      child: _AudioPanel(
+                        audioService: ref.read(studyControllerProvider.notifier).audioService,
+                        onChanged: () => setState(() {}),
                       ),
                     ),
+                  ),
 
-                  // ── Bottom-left: End session ────────────────────────────
+                // ── Collapsible Developer Simulation Panel ───────────────
+                if (_showDevPanel)
                   Positioned(
-                    bottom: 16,
                     left: 16,
-                    child: _EndButton(
-                      onEnd: () async {
-                        final bool? confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            title: const Text('End session?'),
-                            content: const Text(
-                                'Are you sure you want to end this study session?'),
-                            actions: [
-                              TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: const Text('Continue')),
-                              FilledButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: const Text('End')),
-                            ],
-                          ),
-                        );
-                        if (confirm == true && mounted) {
-                          await vm.cancelSession();
-                        }
-                      },
+                    top: 16,
+                    bottom: 80,
+                    child: Container(
+                      width: 170,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.82),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.settings_suggest_rounded, color: gold, size: 16),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'ML Simulator',
+                                  style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  constraints: const BoxConstraints(),
+                                  padding: EdgeInsets.zero,
+                                  icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 14),
+                                  onPressed: () => setState(() => _showDevPanel = false),
+                                ),
+                              ],
+                            ),
+                            const Divider(color: Colors.white24, height: 12),
+                            _DevToggle(
+                              label: 'Face Present',
+                              value: MlSimulatorConfig.faceDetected,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.faceDetected = v),
+                            ),
+                            _DevToggle(
+                              label: 'Multiple Faces',
+                              value: MlSimulatorConfig.multipleFaces,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.multipleFaces = v),
+                            ),
+                            _DevToggle(
+                              label: 'Eyes Closed',
+                              value: MlSimulatorConfig.eyesClosed,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.eyesClosed = v),
+                            ),
+                            _DevToggle(
+                              label: 'Looking Away',
+                              value: MlSimulatorConfig.lookingAway,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.lookingAway = v),
+                            ),
+                            _DevToggle(
+                              label: 'Phone Present',
+                              value: MlSimulatorConfig.phonePresent,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.phonePresent = v),
+                            ),
+                            _DevToggle(
+                              label: 'Book Present',
+                              value: MlSimulatorConfig.bookPresent,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.bookPresent = v),
+                            ),
+                            _DevToggle(
+                              label: 'Laptop Present',
+                              value: MlSimulatorConfig.laptopPresent,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.laptopPresent = v),
+                            ),
+                            _DevToggle(
+                              label: 'Leave Chair',
+                              value: MlSimulatorConfig.leavingChair,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.leavingChair = v),
+                            ),
+                            _DevToggle(
+                              label: 'Slouching',
+                              value: MlSimulatorConfig.slouching,
+                              onChanged: (v) => setState(() => MlSimulatorConfig.slouching = v),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Positioned(
+                    left: 16,
+                    top: 16,
+                    child: FloatingActionButton.small(
+                      backgroundColor: Colors.black87,
+                      foregroundColor: gold,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: const Icon(Icons.settings_suggest_rounded, size: 20),
+                      onPressed: () => setState(() => _showDevPanel = true),
                     ),
                   ),
-                ],
-              ),
+
+                // ── Status Message HUD at Top Center ─────────────────────
+                Positioned(
+                  top: 16,
+                  left: 200,
+                  right: 110,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Text(
+                      studyState.statusMessage,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isFocused ? Colors.greenAccent : Colors.redAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Bottom-left: End session ────────────────────────────
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  child: _EndButton(
+                    onEnd: () async {
+                      final bool? confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('End session?'),
+                          content: const Text(
+                              'Are you sure you want to end this study session?'),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Continue')),
+                            FilledButton(
+                                onPressed: () => Navigator.pop(ctx, true),
+                                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                                child: const Text('End')),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && mounted) {
+                        await ref.read(studyControllerProvider.notifier).stopSession();
+                      }
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+// ── ML Overlay Painter (computes facial meshes + joint lines + box trackers)
+class _MlOverlayPainter extends CustomPainter {
+  _MlOverlayPainter({required this.metrics});
+
+  final FocusMetrics? metrics;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (metrics == null) return;
+
+    final paintFace = Paint()
+      ..color = const Color(0xFF4CAF50).withValues(alpha: 0.6)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.fill;
+
+    final paintLine = Paint()
+      ..color = const Color(0xFF2196F3)
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round;
+
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+    );
+
+    // 1. Draw Simulated Face Mesh (478 pts circle projected visually)
+    if (metrics!.faceDetected && !metrics!.leavingChair) {
+      for (int i = 0; i < 40; i++) {
+        final double angle = (i / 40) * 2 * math.pi;
+        final double rx = size.width * 0.5 + size.width * 0.15 * math.cos(angle);
+        final double ry = size.height * 0.35 + size.height * 0.12 * math.sin(angle);
+        canvas.drawCircle(Offset(rx, ry), 2.5, paintFace);
+      }
+      // Nose
+      canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.35), 4.0, Paint()..color = Colors.red);
+      // Eyes
+      final leftEyeOpen = metrics!.eyesOpen;
+      canvas.drawCircle(Offset(size.width * 0.44, size.height * 0.32), leftEyeOpen ? 5.0 : 2.0, Paint()..color = Colors.green);
+      canvas.drawCircle(Offset(size.width * 0.56, size.height * 0.32), leftEyeOpen ? 5.0 : 2.0, Paint()..color = Colors.green);
+    }
+
+    // 2. Draw Posture Tracker Keypoint Skeleton Lines
+    if (metrics!.faceDetected && !metrics!.leavingChair) {
+      final nose = Offset(size.width * 0.5, size.height * 0.35);
+      // If slouching, lower shoulders significantly
+      final double shoulderY = metrics!.slouching ? size.height * 0.62 : size.height * 0.54;
+      final leftShoulder = Offset(size.width * 0.35, shoulderY);
+      final rightShoulder = Offset(size.width * 0.65, shoulderY);
+
+      canvas.drawLine(nose, leftShoulder, paintLine);
+      canvas.drawLine(nose, rightShoulder, paintLine);
+      canvas.drawLine(leftShoulder, rightShoulder, paintLine);
+    }
+
+    // 3. Draw YOLOv8 Object Bounding Boxes
+    if (metrics!.phoneDetected) {
+      _drawBoundingBox(canvas, size, 0.68, 0.48, 0.18, 0.28, "Cell Phone", Colors.red, textPainter);
+    }
+    if (metrics!.bookDetected) {
+      _drawBoundingBox(canvas, size, 0.3, 0.68, 0.4, 0.2, "Book", Colors.blue, textPainter);
+    }
+    if (metrics!.laptopDetected) {
+      _drawBoundingBox(canvas, size, 0.2, 0.45, 0.6, 0.35, "Laptop", Colors.green, textPainter);
+    }
+    if (metrics!.leavingChair) {
+      _drawBoundingBox(canvas, size, 0.15, 0.25, 0.7, 0.65, "Empty Chair", Colors.amber, textPainter);
+    }
+  }
+
+  void _drawBoundingBox(
+    Canvas canvas,
+    Size size,
+    double rx,
+    double ry,
+    double rw,
+    double rh,
+    String label,
+    Color color,
+    TextPainter textPainter,
+  ) {
+    final rect = Rect.fromLTWH(
+      size.width * rx,
+      size.height * ry,
+      size.width * rw,
+      size.height * rh,
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..color = color
+        ..strokeWidth = 2.5
+        ..style = PaintingStyle.stroke,
+    );
+
+    textPainter.text = TextSpan(
+      text: label,
+      style: TextStyle(
+        color: Colors.white,
+        backgroundColor: color,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(size.width * rx + 4, size.height * ry + 4));
+  }
+
+  @override
+  bool shouldRepaint(covariant _MlOverlayPainter oldDelegate) => true;
+}
+
+// ── Developer Toggle Switch
+class _DevToggle extends StatelessWidget {
+  const _DevToggle({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 10),
+            ),
+          ),
+          SizedBox(
+            height: 20,
+            width: 32,
+            child: Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: const Color(0xFFD4AF37),
+              activeTrackColor: Colors.amber.withOpacity(0.3),
+              inactiveThumbColor: Colors.grey,
+              inactiveTrackColor: Colors.white12,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -317,9 +603,9 @@ class _HudOverlay extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: gold.withOpacity(0.3)),
+        border: Border.all(color: gold.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -373,14 +659,14 @@ class _AudioFab extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: active ? gold : Colors.black.withOpacity(0.6),
+          color: active ? gold : Colors.black.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-              color: active ? gold : Colors.white.withOpacity(0.3), width: 1.5),
+              color: active ? gold : Colors.white.withValues(alpha: 0.3), width: 1.5),
           boxShadow: active
               ? [
                   BoxShadow(
-                      color: gold.withOpacity(0.4),
+                      color: gold.withValues(alpha: 0.4),
                       blurRadius: 12,
                       spreadRadius: 1)
                 ]
@@ -434,9 +720,9 @@ class _AudioPanelState extends State<_AudioPanel> {
           width: 260,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: cardBg.withOpacity(0.85),
+            color: cardBg.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: gold.withOpacity(0.25), width: 1),
+            border: Border.all(color: gold.withValues(alpha: 0.25), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +753,7 @@ class _AudioPanelState extends State<_AudioPanel> {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: gold.withOpacity(0.15),
+                      color: gold.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
@@ -555,12 +841,12 @@ class _AudioPanelState extends State<_AudioPanel> {
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: sel
-                              ? gold.withOpacity(0.18)
-                              : Colors.white.withOpacity(0.05),
+                              ? gold.withValues(alpha: 0.18)
+                              : Colors.white.withValues(alpha: 0.05),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                               color: sel
-                                  ? gold.withOpacity(0.6)
+                                  ? gold.withValues(alpha: 0.6)
                                   : Colors.transparent),
                         ),
                         child: Row(children: [
@@ -595,9 +881,9 @@ class _AudioPanelState extends State<_AudioPanel> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
+                      color: Colors.white.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: gold.withOpacity(0.3)),
+                      border: Border.all(color: gold.withValues(alpha: 0.3)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.folder_open_rounded,
@@ -630,7 +916,7 @@ class _AudioPanelState extends State<_AudioPanel> {
                         activeTrackColor: gold,
                         inactiveTrackColor: Colors.white12,
                         thumbColor: gold,
-                        overlayColor: gold.withOpacity(0.15),
+                        overlayColor: gold.withValues(alpha: 0.15),
                         trackHeight: 3,
                         thumbShape:
                             const RoundSliderThumbShape(enabledThumbRadius: 7),
@@ -684,10 +970,10 @@ class _ModeChip extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? gold.withOpacity(0.22) : Colors.white.withOpacity(0.07),
+          color: active ? gold.withValues(alpha: 0.22) : Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: active ? gold.withOpacity(0.8) : Colors.transparent),
+              color: active ? gold.withValues(alpha: 0.8) : Colors.transparent),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: active ? gold : Colors.white54, size: 14),
@@ -718,7 +1004,7 @@ class _EndButton extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.82),
+          color: Colors.red.withValues(alpha: 0.82),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -738,12 +1024,12 @@ class _EndButton extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _PreSessionPanel extends StatelessWidget {
   const _PreSessionPanel({
-    required this.vm,
+    required this.state,
     required this.minutesNotifier,
     required this.onStartSession,
   });
 
-  final StudyViewModel vm;
+  final StudyState state;
   final ValueNotifier<int> minutesNotifier;
   final VoidCallback onStartSession;
 
@@ -799,8 +1085,9 @@ class _PreSessionPanel extends StatelessWidget {
                   height: 54,
                   child: FilledButton.icon(
                     onPressed: onStartSession,
+                    style: FilledButton.styleFrom(backgroundColor: gold, foregroundColor: Colors.black),
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Start Study Session'),
+                    label: const Text('Start Study Session', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
 import '../../../core/services/razorpay_payout_service.dart';
-import '../viewmodels/wallet_view_model.dart';
+import '../presentation/providers/wallet_provider.dart';
 
-class WithdrawScreen extends StatefulWidget {
+class WithdrawScreen extends ConsumerStatefulWidget {
   const WithdrawScreen({super.key});
 
   @override
-  State<WithdrawScreen> createState() => _WithdrawScreenState();
+  ConsumerState<WithdrawScreen> createState() => _WithdrawScreenState();
 }
 
-class _WithdrawScreenState extends State<WithdrawScreen>
+class _WithdrawScreenState extends ConsumerState<WithdrawScreen>
     with SingleTickerProviderStateMixin {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameCtrl = TextEditingController();
@@ -58,7 +58,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
       _verifyResult = null;
     });
 
-    final result = await context.read<WalletViewModel>().verifyBankAccount(
+    final result = await ref.read(walletControllerProvider.notifier).verifyBankAccount(
           accountNumber: _accCtrl.text.trim(),
           ifscCode: _ifscCtrl.text.trim().toUpperCase(),
           accountHolderName: _nameCtrl.text.trim(),
@@ -72,7 +72,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
     }
   }
 
-  Future<void> _showConfirmation(WalletViewModel wallet) async {
+  Future<void> _showConfirmation() async {
     if (!_formKey.currentState!.validate()) return;
 
     final double? amount = double.tryParse(_amountCtrl.text.trim());
@@ -92,15 +92,15 @@ class _WithdrawScreenState extends State<WithdrawScreen>
     );
 
     if (confirmed == true && mounted) {
-      await _submitWithdrawal(wallet, amount);
+      await _submitWithdrawal(amount);
     }
   }
 
-  Future<void> _submitWithdrawal(WalletViewModel wallet, double amount) async {
+  Future<void> _submitWithdrawal(double amount) async {
     setState(() => _isSubmitting = true);
 
     try {
-      final PayoutResult result = await wallet.withdraw(
+      final PayoutResult result = await ref.read(walletControllerProvider.notifier).withdraw(
         accountHolderName: _nameCtrl.text.trim(),
         bankName: _bankCtrl.text.trim(),
         accountNumber: _accCtrl.text.trim(),
@@ -153,6 +153,7 @@ class _WithdrawScreenState extends State<WithdrawScreen>
     }
 
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final walletState = ref.watch(walletControllerProvider);
 
     return Scaffold(
       backgroundColor:
@@ -167,213 +168,207 @@ class _WithdrawScreenState extends State<WithdrawScreen>
         elevation: 0,
         foregroundColor: isDark ? Colors.white : const Color(0xFF1A1A2E),
       ),
-      body: Consumer<WalletViewModel>(
-        builder: (context, wallet, _) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Balance card ────────────────────────────────────────
+              _BalanceCard(
+                balanceInr: walletState.balanceInr,
+                isDark: isDark,
+              ),
+              const SizedBox(height: 24),
+
+              // ── Section: Bank Details ───────────────────────────────
+              _SectionHeader('Bank Details', isDark: isDark),
+              const SizedBox(height: 12),
+
+              _FormCard(
+                isDark: isDark,
                 children: [
-                  // ── Balance card ────────────────────────────────────────
-                  _BalanceCard(
-                    balanceInr: wallet.balanceInr,
-                    isDark: isDark,
+                  _Field(
+                    controller: _nameCtrl,
+                    label: 'Account Holder Name',
+                    icon: Icons.person_rounded,
+                    hint: 'As per bank records',
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Enter account holder name'
+                        : null,
+                    onChanged: (_) => setState(() => _verifyResult = null),
                   ),
-                  const SizedBox(height: 24),
-
-                  // ── Section: Bank Details ───────────────────────────────
-                  _SectionHeader('Bank Details', isDark: isDark),
-                  const SizedBox(height: 12),
-
-                  _FormCard(
-                    isDark: isDark,
-                    children: [
-                      _Field(
-                        controller: _nameCtrl,
-                        label: 'Account Holder Name',
-                        icon: Icons.person_rounded,
-                        hint: 'As per bank records',
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Enter account holder name'
-                            : null,
-                        onChanged: (_) => setState(() => _verifyResult = null),
-                      ),
-                      const SizedBox(height: 14),
-                      _Field(
-                        controller: _bankCtrl,
-                        label: 'Bank Name',
-                        icon: Icons.account_balance_rounded,
-                        hint: 'e.g. State Bank of India',
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Enter bank name'
-                            : null,
-                      ),
-                      const SizedBox(height: 14),
-                      _Field(
-                        controller: _accCtrl,
-                        label: 'Account Number',
-                        icon: Icons.credit_card_rounded,
-                        hint: '9–18 digit account number',
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(18),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Enter account number';
-                          }
-                          if (v.length < 9) {
-                            return 'Account number too short (min 9 digits)';
-                          }
-                          return null;
-                        },
-                        onChanged: (_) => setState(() => _verifyResult = null),
-                      ),
-                      const SizedBox(height: 14),
-                      _Field(
-                        controller: _ifscCtrl,
-                        label: 'IFSC Code',
-                        icon: Icons.qr_code_rounded,
-                        hint: 'e.g. SBIN0001234',
-                        textCapitalization: TextCapitalization.characters,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'[A-Za-z0-9]')),
-                          LengthLimitingTextInputFormatter(11),
-                          _UpperCaseFormatter(),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Enter IFSC code';
-                          }
-                          if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$')
-                              .hasMatch(v.toUpperCase())) {
-                            return 'Invalid IFSC. Format: ABCD0123456';
-                          }
-                          return null;
-                        },
-                        onChanged: (_) => setState(() => _verifyResult = null),
-                      ),
+                  const SizedBox(height: 14),
+                  _Field(
+                    controller: _bankCtrl,
+                    label: 'Bank Name',
+                    icon: Icons.account_balance_rounded,
+                    hint: 'e.g. State Bank of India',
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Enter bank name'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  _Field(
+                    controller: _accCtrl,
+                    label: 'Account Number',
+                    icon: Icons.credit_card_rounded,
+                    hint: '9–18 digit account number',
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(18),
                     ],
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Enter account number';
+                      }
+                      if (v.length < 9) {
+                        return 'Account number too short (min 9 digits)';
+                      }
+                      return null;
+                    },
+                    onChanged: (_) => setState(() => _verifyResult = null),
                   ),
-
-                  // ── Verify Bank Button ──────────────────────────────────
-                  const SizedBox(height: 12),
-                  _VerifyButton(
-                    isVerifying: _isVerifying,
-                    result: _verifyResult,
-                    onVerify: _verifyBank,
-                    isDark: isDark,
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // ── Section: UPI (optional) ─────────────────────────────
-                  _SectionHeader('UPI ID (Optional)', isDark: isDark),
-                  const SizedBox(height: 12),
-                  _FormCard(
-                    isDark: isDark,
-                    children: [
-                      _Field(
-                        controller: _upiCtrl,
-                        label: 'UPI ID',
-                        icon: Icons.smartphone_rounded,
-                        hint: 'yourname@upi (optional)',
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) return null;
-                          if (!v.contains('@')) return 'Invalid UPI format';
-                          return null;
-                        },
-                      ),
+                  const SizedBox(height: 14),
+                  _Field(
+                    controller: _ifscCtrl,
+                    label: 'IFSC Code',
+                    icon: Icons.qr_code_rounded,
+                    hint: 'e.g. SBIN0001234',
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[A-Za-z0-9]')),
+                      LengthLimitingTextInputFormatter(11),
+                      _UpperCaseFormatter(),
                     ],
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Enter IFSC code';
+                      }
+                      if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$')
+                          .hasMatch(v.toUpperCase())) {
+                        return 'Invalid IFSC. Format: ABCD0123456';
+                      }
+                      return null;
+                    },
+                    onChanged: (_) => setState(() => _verifyResult = null),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // ── Section: Amount ─────────────────────────────────────
-                  _SectionHeader('Withdrawal Amount', isDark: isDark),
-                  const SizedBox(height: 12),
-                  _FormCard(
-                    isDark: isDark,
-                    children: [
-                      _Field(
-                        controller: _amountCtrl,
-                        label: 'Amount (₹)',
-                        icon: Icons.currency_rupee_rounded,
-                        hint: 'Min ₹1.00',
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(
-                              RegExp(r'^\d+\.?\d{0,2}')),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'Enter withdrawal amount';
-                          }
-                          final double? amt = double.tryParse(v);
-                          if (amt == null || amt <= 0) {
-                            return 'Enter a valid amount';
-                          }
-                          if (amt < 1.0) {
-                            return 'Minimum withdrawal is ₹1.00';
-                          }
-                          if (amt > wallet.balanceInr) {
-                            return 'Insufficient balance (₹${wallet.balanceInr.toStringAsFixed(2)} available)';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      // Quick amount chips
-                      Wrap(
-                        spacing: 8,
-                        children: [10, 25, 50, 100]
-                            .map((amt) => ActionChip(
-                                  label: Text('₹$amt'),
-                                  onPressed: wallet.balanceInr >= amt
-                                      ? () => setState(
-                                          () => _amountCtrl.text = '$amt.00')
-                                      : null,
-                                ))
-                            .toList(),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ── Info box ────────────────────────────────────────────
-                  _InfoBox(isDark: isDark),
                 ],
               ),
-            ),
-          );
-        },
+
+              // ── Verify Bank Button ──────────────────────────────────
+              const SizedBox(height: 12),
+              _VerifyButton(
+                isVerifying: _isVerifying,
+                result: _verifyResult,
+                onVerify: _verifyBank,
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── Section: UPI (optional) ─────────────────────────────
+              _SectionHeader('UPI ID (Optional)', isDark: isDark),
+              const SizedBox(height: 12),
+              _FormCard(
+                isDark: isDark,
+                children: [
+                  _Field(
+                    controller: _upiCtrl,
+                    label: 'UPI ID',
+                    icon: Icons.smartphone_rounded,
+                    hint: 'yourname@upi (optional)',
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null;
+                      if (!v.contains('@')) return 'Invalid UPI format';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── Section: Amount ─────────────────────────────────────
+              _SectionHeader('Withdrawal Amount', isDark: isDark),
+              const SizedBox(height: 12),
+              _FormCard(
+                isDark: isDark,
+                children: [
+                  _Field(
+                    controller: _amountCtrl,
+                    label: 'Amount (₹)',
+                    icon: Icons.currency_rupee_rounded,
+                    hint: 'Min ₹1.00',
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d+\.?\d{0,2}')),
+                    ],
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Enter withdrawal amount';
+                      }
+                      final double? amt = double.tryParse(v);
+                      if (amt == null || amt <= 0) {
+                        return 'Enter a valid amount';
+                      }
+                      if (amt < 1.0) {
+                        return 'Minimum withdrawal is ₹1.00';
+                      }
+                      if (amt > walletState.balanceInr) {
+                        return 'Insufficient balance (₹${walletState.balanceInr.toStringAsFixed(2)} available)';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  // Quick amount chips
+                  Wrap(
+                    spacing: 8,
+                    children: [10, 25, 50, 100]
+                        .map((amt) => ActionChip(
+                              label: Text('₹$amt'),
+                              onPressed: walletState.balanceInr >= amt
+                                  ? () => setState(
+                                      () => _amountCtrl.text = '$amt.00')
+                                  : null,
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              // ── Info box ────────────────────────────────────────────
+              _InfoBox(isDark: isDark),
+            ],
+          ),
+        ),
       ),
 
       // ── Submit FAB ──────────────────────────────────────────────────────
-      floatingActionButton: Consumer<WalletViewModel>(
-        builder: (context, wallet, _) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: SizedBox(
-            width: double.infinity,
-            child: FloatingActionButton.extended(
-              heroTag: 'withdraw_fab',
-              onPressed: _isSubmitting ? null : () => _showConfirmation(wallet),
-              backgroundColor: const Color(0xFF0E4D45),
-              icon: const Icon(Icons.account_balance_rounded,
-                  color: Colors.white),
-              label: const Text(
-                'Withdraw Now',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16),
-              ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: SizedBox(
+          width: double.infinity,
+          child: FloatingActionButton.extended(
+            heroTag: 'withdraw_fab',
+            onPressed: _isSubmitting ? null : _showConfirmation,
+            backgroundColor: const Color(0xFF0E4D45),
+            icon: const Icon(Icons.account_balance_rounded,
+                color: Colors.white),
+            label: const Text(
+              'Withdraw Now',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16),
             ),
           ),
         ),
