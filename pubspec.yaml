@@ -1,0 +1,37 @@
+name: study_earn
+description: StudyEarn - Get Paid to Study
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  just_audio: ^0.9.40
+  file_picker: ^8.1.2
+  camera: ^0.11.0+2
+  google_mlkit_face_detection: ^0.13.0
+  permission_handler: ^11.3.1
+  provider: ^6.1.2
+  shared_preferences: ^2.3.2
+  intl: ^0.18.0
+  vibration: ^3.0.0
+  flutter_riverpod: ^2.5.1
+  firebase_core: ^3.1.0
+  cloud_firestore: ^5.0.1
+  firebase_auth: ^5.1.0
+  tflite_flutter: ^0.10.4
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/white_noise.mp3
+    - assets/sounds/rain.mp3
+    - assets/sounds/brown_noise.mp3
