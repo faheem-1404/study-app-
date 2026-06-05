@@ -49,9 +49,6 @@ Map<String, double> _estimateHeadPose(List<LandmarkPoint> landmarks) {
   // Outer corners of eyes
   final leftEyeOuter = landmarks[33];
   final rightEyeOuter = landmarks[263];
-  // Mouth corners
-  final leftMouth = landmarks[61];
-  final rightMouth = landmarks[291];
   // Chin
   final chin = landmarks[152];
 
@@ -121,16 +118,20 @@ class TfliteFaceLandmarkerService implements FaceLandmarkerService {
         (i) => const LandmarkPoint(x: 0.5, y: 0.5, z: 0.0),
       );
 
+      final double earLeft = _calculateEar(mockLandmarks, 33, 160, 158, 133, 153, 144);
+      final double earRight = _calculateEar(mockLandmarks, 362, 385, 387, 263, 373, 380);
+      final Map<String, double> headPose = _estimateHeadPose(mockLandmarks);
+
       return FaceMeshResult(
         faceDetected: true,
         multipleFacesDetected: false,
         landmarks: mockLandmarks,
-        leftEyeEar: 0.28,
-        rightEyeEar: 0.27,
+        leftEyeEar: earLeft,
+        rightEyeEar: earRight,
         isLookingAway: false,
-        yaw: 0.0,
-        pitch: 0.0,
-        roll: 0.0,
+        yaw: headPose['yaw'] ?? 0.0,
+        pitch: headPose['pitch'] ?? 0.0,
+        roll: headPose['roll'] ?? 0.0,
       );
     } catch (e) {
       debugPrint('Error processing image in TfliteFaceLandmarker: $e');

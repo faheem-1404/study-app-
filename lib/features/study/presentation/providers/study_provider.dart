@@ -6,14 +6,12 @@ import 'package:vibration/vibration.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/models/focus_metrics.dart';
-import '../../../../core/models/focus_sound.dart';
 import '../../../../core/models/study_session_summary.dart';
 import '../../../../core/providers/providers.dart';
 import '../../../../core/services/credit_calculator.dart';
 import '../../../../core/services/focus_audio_service.dart';
 import '../../../../domain/services/ml_service_interfaces.dart';
 import '../../../../domain/services/focus_analyzer.dart';
-import '../../../../data/services/simulated_ml_service.dart';
 import '../../../wallet/presentation/providers/wallet_provider.dart';
 
 class StudyState {
@@ -105,7 +103,6 @@ class StudyController extends StateNotifier<StudyState> {
 
   bool _faceAnalysisBusy = false;
   bool _lastFocusState = true;
-  DateTime? _distractionStartTime;
 
   CameraController? get cameraController => _cameraController;
 
@@ -169,7 +166,6 @@ class StudyController extends StateNotifier<StudyState> {
     );
 
     _analyzer.reset();
-    _distractionStartTime = null;
     _lastFocusState = true;
 
     if (_cameraController == null || !_cameraController!.value.isInitialized) {
@@ -428,15 +424,15 @@ class StudyController extends StateNotifier<StudyState> {
 
   Future<void> _triggerFocusLossVibration() async {
     try {
-      final bool? has = await Vibration.hasVibrator();
-      if (has == true) await Vibration.vibrate(duration: 80);
+      final bool has = await Vibration.hasVibrator();
+      if (has) await Vibration.vibrate(duration: 80);
     } catch (_) {}
   }
 
   Future<void> _triggerSleepVibration() async {
     try {
-      final bool? has = await Vibration.hasVibrator();
-      if (has == true) {
+      final bool has = await Vibration.hasVibrator();
+      if (has) {
         await Vibration.vibrate(duration: 50);
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await Vibration.vibrate(duration: 50);

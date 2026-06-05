@@ -62,7 +62,7 @@ class RedemptionReceiptScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     _row('Request ID', request.id),
-                    _row('Credits', '${request.credits.toStringAsFixed(0)}'),
+                    _row('Credits', request.credits.toStringAsFixed(0)),
                     _row('Requested', request.createdAt.toLocal().toString()),
                     _row('ETA', request.estimatedPayoutAt.toLocal().toString()),
                   ],
@@ -77,7 +77,9 @@ class RedemptionReceiptScreen extends ConsumerWidget {
                     ? () async {
                         // For the mock demo allow marking completed
                         await ref.read(walletControllerProvider.notifier).updateRedemptionStatus(request.id, RedemptionStatus.completed);
-                        Navigator.of(context).pop();
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
                       }
                     : null,
                 child: Text(canComplete ? 'Mark as completed (dev)' : 'Completed'),

@@ -4,16 +4,13 @@ import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/focus_sound.dart';
 import '../../../core/models/focus_metrics.dart';
-import '../../../core/models/study_session_summary.dart';
 import '../../../core/services/focus_audio_service.dart';
-import '../../shared/widgets/metric_card.dart';
 import '../presentation/providers/study_provider.dart';
 import '../../../data/services/simulated_ml_service.dart';
 import 'study_result_screen.dart';
@@ -31,7 +28,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
   bool _isPreparing = true;
   bool _sessionStarted = false;
   bool _showAudioPanel = false;
-  bool _showDevPanel = true; // Show simulation panel by default on web/sim
   final ValueNotifier<int> _minutesNotifier =
       ValueNotifier<int>(AppConstants.defaultStudyMinutes);
 
@@ -117,7 +113,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
   Widget build(BuildContext context) {
     const Color gold = Color(0xFFD4AF37);
     const Color darkBg = Color(0xFF0D0D0D);
-    const Color green = Color(0xFF4CAF50);
     
     final studyState = ref.watch(studyControllerProvider);
 
@@ -810,105 +805,6 @@ class _MlOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant _MlOverlayPainter oldDelegate) => true;
 }
 
-// ── Developer Toggle Switch
-class _DevToggle extends StatelessWidget {
-  const _DevToggle({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.white70, fontSize: 10),
-            ),
-          ),
-          SizedBox(
-            height: 20,
-            width: 32,
-            child: Switch(
-              value: value,
-              onChanged: onChanged,
-              activeColor: const Color(0xFFD4AF37),
-              activeTrackColor: Colors.amber.withOpacity(0.3),
-              inactiveThumbColor: Colors.grey,
-              inactiveTrackColor: Colors.white12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HUD overlay (top-right)
-// ─────────────────────────────────────────────────────────────────────────────
-class _HudOverlay extends StatelessWidget {
-  const _HudOverlay({
-    required this.time,
-    required this.focusPct,
-    required this.credits,
-  });
-
-  final String time;
-  final int focusPct;
-  final int credits;
-
-  @override
-  Widget build(BuildContext context) {
-    const Color gold = Color(0xFFD4AF37);
-    const Color silver = Color(0xFFC0C0C0);
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: gold.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(time,
-              style: const TextStyle(
-                  color: gold,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Courier')),
-          const SizedBox(height: 6),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.remove_red_eye, size: 13, color: silver),
-            const SizedBox(width: 4),
-            Text('$focusPct%',
-                style: const TextStyle(
-                    color: silver, fontSize: 12, fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 4),
-          Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.monetization_on, size: 13, color: gold),
-            const SizedBox(width: 4),
-            Text('$credits credits',
-                style: const TextStyle(
-                    color: gold, fontSize: 12, fontWeight: FontWeight.w600)),
-          ]),
-        ],
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🎧 FAB

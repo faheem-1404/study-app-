@@ -18,7 +18,7 @@ class StatusTimeline extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: steps.map((s) {
         final bool active = _compareStatus(s.status, status);
-        final Color color = active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withOpacity(0.2);
+        final Color color = active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2);
         return Expanded(
           child: Column(
             children: <Widget>[
@@ -37,7 +37,7 @@ class StatusTimeline extends StatelessWidget {
                 s.label,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: active ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: active ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
               ),
             ],

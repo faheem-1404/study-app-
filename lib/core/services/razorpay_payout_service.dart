@@ -7,11 +7,11 @@
 /// NEVER hardcode live keys in the Flutter app — use a server-side proxy.
 class RazorpayPayoutService {
   // Test keys — safe for development. Replace with server-side calls for production.
-  static const String _keyId = 'rzp_test_SxuS1FNdZvGzkQ';
-  static const String _keySecret = 'BcNyPjofTMPjFXqlNEVMiX1b';
+  static const String keyId = 'rzp_test_SxuS1FNdZvGzkQ';
+  static const String keySecret = 'BcNyPjofTMPjFXqlNEVMiX1b';
 
   // Replace with your actual Razorpay X current account number after activation
-  static const String _accountNumber = 'YOUR_RAZORPAY_X_ACCOUNT_NUMBER';
+  static const String accountNumber = 'YOUR_RAZORPAY_X_ACCOUNT_NUMBER';
 
   /// Verify a bank account before initiating a payout.
   /// Calls Razorpay Fund Account Validation API.

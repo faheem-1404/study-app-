@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 /// Represents focus detection metrics captured from face and object analysis
 class FocusMetrics {
   const FocusMetrics({

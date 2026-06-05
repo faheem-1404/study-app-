@@ -2,12 +2,10 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/models/focus_metrics.dart';
-import '../../../core/models/focus_sound.dart';
 import '../../../core/models/study_session_summary.dart';
 import '../../../core/services/credit_calculator.dart';
 import '../../../core/services/face_detection_service.dart';
@@ -17,10 +15,8 @@ import '../../../core/services/focus_score_service.dart';
 class StudyViewModel extends ChangeNotifier {
   StudyViewModel({
     required FaceDetectionService faceDetectionService,
-  })  : _faceDetectionService = faceDetectionService,
-        _focusScoreService = FocusScoreService();
+  })  : _focusScoreService = FocusScoreService();
 
-  final FaceDetectionService _faceDetectionService;
   final FocusScoreService _focusScoreService;
   final FocusAudioService audioService = FocusAudioService();
 
@@ -350,13 +346,13 @@ class StudyViewModel extends ChangeNotifier {
 
   // ── vibration ─────────────────────────────────────────────────────────────
   Future<void> _triggerFocusLossVibration() async {
-    final bool? has = await Vibration.hasVibrator();
-    if (has == true) await Vibration.vibrate(duration: 50);
+    final bool has = await Vibration.hasVibrator();
+    if (has) await Vibration.vibrate(duration: 50);
   }
 
   Future<void> _triggerSleepVibration() async {
-    final bool? has = await Vibration.hasVibrator();
-    if (has == true) {
+    final bool has = await Vibration.hasVibrator();
+    if (has) {
       await Vibration.vibrate(duration: 30);
       await Future<void>.delayed(const Duration(milliseconds: 50));
       await Vibration.vibrate(duration: 30);

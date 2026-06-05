@@ -29,11 +29,11 @@ class _IllustrationPainter extends CustomPainter {
     final Paint p = Paint()..isAntiAlias = true;
 
     // soft background blob
-    p.color = primary.withOpacity(0.12);
+    p.color = primary.withValues(alpha: 0.12);
     canvas.drawOval(Rect.fromLTWH(0, size.height * 0.2, size.width, size.height * 0.7), p);
 
     // inner circle
-    p.color = secondary.withOpacity(0.22);
+    p.color = secondary.withValues(alpha: 0.22);
     canvas.drawCircle(Offset(size.width * 0.65, size.height * 0.35), size.width * 0.28, p);
 
     // book-like rectangle
@@ -45,7 +45,7 @@ class _IllustrationPainter extends CustomPainter {
     canvas.drawRRect(book, p);
 
     // highlight stripe
-    p.color = Colors.white.withOpacity(0.14);
+    p.color = Colors.white.withValues(alpha: 0.14);
     canvas.drawRect(Rect.fromLTWH(size.width * 0.2, size.height * 0.5, size.width * 0.5, size.height * 0.06), p);
 
     // small accent circle

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -65,9 +64,11 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0D0D0D) : const Color(0xFFF2F4F8),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      body: FadeTransition(
+        opacity: _cardFade,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
           // ── App Bar ──────────────────────────────────────────────────
           SliverAppBar(
             pinned: true,
@@ -175,6 +176,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
             ),
         ],
       ),
+    ),
 
       // ── Withdraw FAB ───────────────────────────────────────────────────
       floatingActionButton: _WithdrawFab(
@@ -359,7 +361,7 @@ class _EarningsSummaryRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             label: "Today's Earnings",
-            value: '${wallet.todayEarnings.toStringAsFixed(1)}',
+            value: wallet.todayEarnings.toStringAsFixed(1),
             unit: 'cr',
             icon: Icons.today_rounded,
             color: const Color(0xFF4CAF50),
@@ -371,7 +373,7 @@ class _EarningsSummaryRow extends StatelessWidget {
         Expanded(
           child: _StatCard(
             label: 'This Week',
-            value: '${wallet.weeklyEarnings.toStringAsFixed(1)}',
+            value: wallet.weeklyEarnings.toStringAsFixed(1),
             unit: 'cr',
             icon: Icons.bar_chart_rounded,
             color: const Color(0xFF2196F3),

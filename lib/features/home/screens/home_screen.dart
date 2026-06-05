@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/models/payout_method.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
 import '../../wallet/screens/wallet_screen.dart';
 import '../../study/screens/study_screen.dart';

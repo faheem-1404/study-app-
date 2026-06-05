@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:collection';
 
 import '../models/focus_metrics.dart' as old;
@@ -146,9 +145,7 @@ class IntelligentFocusTracker {
       // Pause after 5 seconds
       if (timeSinceDistraction > distractionPauseMs) {
         isPausedDueToDistraction = true;
-        if (_pauseStartTime == null) {
-          _pauseStartTime = now;
-        }
+        _pauseStartTime ??= now;
       }
 
       // Resume if user returns within 5 seconds of being paused

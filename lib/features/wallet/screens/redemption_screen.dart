@@ -225,7 +225,7 @@ class _RedemptionScreenState extends ConsumerState<RedemptionScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<PayoutMethod>(
-                        value: _method,
+                        initialValue: _method,
                         decoration: const InputDecoration(labelText: 'Method'),
                         items: PayoutMethod.values
                             .map(

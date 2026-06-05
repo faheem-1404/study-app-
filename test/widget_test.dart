@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:study_earn/core/models/focus_metrics.dart';
 import 'package:study_earn/core/models/study_session_summary.dart';
 import 'package:study_earn/core/models/payout_method.dart';
 import 'package:study_earn/core/models/wallet_transaction.dart';
