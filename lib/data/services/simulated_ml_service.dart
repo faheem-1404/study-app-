@@ -4,17 +4,29 @@ import 'package:flutter/material.dart';
 
 import '../../domain/services/ml_service_interfaces.dart';
 
-/// Global controller to simulate ML states in the Developer Panel
+/// Global controller to simulate ML states in the Developer Panel using confidence sliders
 class MlSimulatorConfig {
-  static bool faceDetected = true;
-  static bool multipleFaces = false;
-  static bool eyesClosed = false;
-  static bool lookingAway = false;
-  static bool phonePresent = false;
-  static bool bookPresent = true;
-  static bool laptopPresent = false;
-  static bool leavingChair = false;
-  static bool slouching = false;
+  // Confidence values (0.0 to 1.0)
+  static double faceConfidence = 0.98;
+  static double multipleFacesConfidence = 0.02;
+  static double eyesOpenConfidence = 0.96;
+  static double headForwardConfidence = 0.92;
+  static double postureConfidence = 0.94;
+  static double phoneConfidence = 0.05;
+  static double bookConfidence = 0.85;
+  static double laptopConfidence = 0.10;
+  static double leavingChairConfidence = 0.01;
+
+  // Derived binary states
+  static bool get faceDetected => faceConfidence > 0.5;
+  static bool get multipleFaces => multipleFacesConfidence > 0.5;
+  static bool get eyesClosed => eyesOpenConfidence < 0.5;
+  static bool get lookingAway => headForwardConfidence < 0.5;
+  static bool get phonePresent => phoneConfidence > 0.5;
+  static bool get bookPresent => bookConfidence > 0.5;
+  static bool get laptopPresent => laptopConfidence > 0.5;
+  static bool get leavingChair => leavingChairConfidence > 0.5;
+  static bool get slouching => postureConfidence < 0.5;
 
   /// Helper to get a simulated focus score based on current toggles
   static double get calculatedScore {
@@ -47,7 +59,7 @@ class MlSimulatorConfig {
       score += 5.0;
     }
 
-    // Low Distraction: 15%
+    // Low Distraction: 15% (deducted if phone is present)
     if (!phonePresent) {
       score += 15.0;
     }
@@ -129,7 +141,7 @@ class SimulatedPostureTracker implements PostureTrackerService {
       6: const Offset(0.6, 0.5),  // right shoulder
     };
 
-    final double score = MlSimulatorConfig.slouching ? 45.0 : 92.0;
+    final double score = MlSimulatorConfig.postureConfidence * 100.0;
 
     return PostureResult(
       isSlouching: MlSimulatorConfig.slouching,
@@ -157,35 +169,35 @@ class SimulatedObjectDetector implements ObjectDetectorService {
     final List<DetectedObject> list = <DetectedObject>[];
 
     if (MlSimulatorConfig.leavingChair) {
-      list.add(const DetectedObject(
+      list.add(DetectedObject(
         label: StudyObjectClass.chair,
-        confidence: 0.95,
-        boundingBox: BoundingBox(left: 0.2, top: 0.3, width: 0.6, height: 0.6),
+        confidence: MlSimulatorConfig.leavingChairConfidence,
+        boundingBox: const BoundingBox(left: 0.2, top: 0.3, width: 0.6, height: 0.6),
       ));
       return list;
     }
 
     if (MlSimulatorConfig.phonePresent) {
-      list.add(const DetectedObject(
+      list.add(DetectedObject(
         label: StudyObjectClass.phone,
-        confidence: 0.88,
-        boundingBox: BoundingBox(left: 0.7, top: 0.6, width: 0.15, height: 0.25),
+        confidence: MlSimulatorConfig.phoneConfidence,
+        boundingBox: const BoundingBox(left: 0.7, top: 0.6, width: 0.15, height: 0.25),
       ));
     }
 
     if (MlSimulatorConfig.bookPresent) {
-      list.add(const DetectedObject(
+      list.add(DetectedObject(
         label: StudyObjectClass.book,
-        confidence: 0.91,
-        boundingBox: BoundingBox(left: 0.3, top: 0.7, width: 0.4, height: 0.25),
+        confidence: MlSimulatorConfig.bookConfidence,
+        boundingBox: const BoundingBox(left: 0.3, top: 0.7, width: 0.4, height: 0.25),
       ));
     }
 
     if (MlSimulatorConfig.laptopPresent) {
-      list.add(const DetectedObject(
+      list.add(DetectedObject(
         label: StudyObjectClass.laptop,
-        confidence: 0.94,
-        boundingBox: BoundingBox(left: 0.2, top: 0.5, width: 0.5, height: 0.4),
+        confidence: MlSimulatorConfig.laptopConfidence,
+        boundingBox: const BoundingBox(left: 0.2, top: 0.5, width: 0.5, height: 0.4),
       ));
     }
 

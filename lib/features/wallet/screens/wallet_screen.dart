@@ -15,8 +15,9 @@ class WalletScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletScreenState extends ConsumerState<WalletScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _cardAnim;
+  late AnimationController _fadeController;
   late Animation<double> _cardFloat;
   late Animation<double> _cardFade;
   late Animation<double> _shimmer;
@@ -33,10 +34,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
       CurvedAnimation(parent: _cardAnim, curve: Curves.easeInOut),
     );
 
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+
     _cardFade = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(
-        parent: AnimationController(vsync: this, duration: const Duration(milliseconds: 700))
-          ..forward(),
+        parent: _fadeController,
         curve: Curves.easeOut,
       ),
     );
@@ -49,6 +54,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen>
   @override
   void dispose() {
     _cardAnim.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 

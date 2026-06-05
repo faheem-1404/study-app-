@@ -134,8 +134,15 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
       }
     });
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+        final shouldLeave = await _onWillPop();
+        if (shouldLeave && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
       child: Scaffold(
         backgroundColor: darkBg,
         body: Builder(
@@ -202,228 +209,492 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
             final bool isFocused = studyState.focusScore > 50;
 
-            return Stack(
+            return Column(
               children: [
-                // ── Camera preview ──────────────────────────────────────
-                SizedBox.expand(child: CameraPreview(ctrl)),
-
-                // ── Face Mesh and Bounding Box Canvas Painter Overlay ────
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: _MlOverlayPainter(metrics: studyState.currentFocusMetrics),
+                // ── Top 72% - Camera View Card ───────────────────────────
+                Expanded(
+                  flex: 72,
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: Colors.white12, width: 1.5),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(26),
+                      child: Stack(
+                        children: [
+                          Positioned.fill(child: CameraPreview(ctrl)),
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: CustomPaint(
+                                painter: _MlOverlayPainter(metrics: studyState.currentFocusMetrics),
+                              ),
+                            ),
+                          ),
+                          // Glow border if focused
+                          if (isFocused)
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: Colors.green.withValues(alpha: 0.5),
+                                      width: 4,
+                                    ),
+                                    borderRadius: BorderRadius.circular(26),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Audio panel overlay
+                          if (_showAudioPanel)
+                            Positioned(
+                              bottom: 16,
+                              right: 16,
+                              child: FadeTransition(
+                                opacity: _panelFade,
+                                child: _AudioPanel(
+                                  audioService: ref.read(studyControllerProvider.notifier).audioService,
+                                  onChanged: () => setState(() {}),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
 
-                // ── Focus glow border ───────────────────────────────────
-                if (isFocused)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: green.withValues(alpha: 0.35),
-                            width: 3,
+                // ── Bottom 28% - Spacing-controlled Dashboard ────────────
+                Expanded(
+                  flex: 28,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                    color: darkBg,
+                    child: Column(
+                      children: [
+                        // Status message banner
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isFocused ? Colors.green.withValues(alpha: 0.08) : Colors.red.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isFocused ? Colors.green.withValues(alpha: 0.25) : Colors.red.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                isFocused ? Icons.check_circle_rounded : Icons.warning_amber_rounded,
+                                color: isFocused ? Colors.greenAccent : Colors.redAccent,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  studyState.statusMessage,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isFocused ? Colors.greenAccent : Colors.redAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-
-                // ── Top-right HUD ───────────────────────────────────────
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: _HudOverlay(
-                    time: _fmt(studyState.remainingSeconds),
-                    focusPct: studyState.focusScore,
-                    credits: studyState.focusedSeconds ~/ 60,
-                  ),
-                ),
-
-                // ── Bottom-right: 🎧 Audio button ───────────────────────
-                Positioned(
-                  bottom: 16,
-                  right: 16,
-                  child: _AudioFab(
-                    audioService: ref.read(studyControllerProvider.notifier).audioService,
-                    onTap: _toggleAudioPanel,
-                  ),
-                ),
-
-                // ── Audio panel (glass) ─────────────────────────────────
-                if (_showAudioPanel)
-                  Positioned(
-                    bottom: 72,
-                    right: 16,
-                    child: FadeTransition(
-                      opacity: _panelFade,
-                      child: _AudioPanel(
-                        audioService: ref.read(studyControllerProvider.notifier).audioService,
-                        onChanged: () => setState(() {}),
-                      ),
-                    ),
-                  ),
-
-                // ── Collapsible Developer Simulation Panel ───────────────
-                if (_showDevPanel)
-                  Positioned(
-                    left: 16,
-                    top: 16,
-                    bottom: 80,
-                    child: Container(
-                      width: 170,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.82),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
+                        const Spacer(),
+                        // Controls Row
+                        Row(
                           children: [
-                            Row(
+                            // End Button
+                            _EndButton(
+                              onEnd: () async {
+                                final bool? confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('End session?'),
+                                    content: const Text('Are you sure you want to end this study session?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Continue'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                                        child: const Text('End'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirm == true && mounted) {
+                                  await ref.read(studyControllerProvider.notifier).stopSession();
+                                }
+                              },
+                            ),
+                            const Spacer(),
+                            // HUD stats (Time, Focus Score, Credits)
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.settings_suggest_rounded, color: gold, size: 16),
-                                const SizedBox(width: 4),
-                                const Text(
-                                  'ML Simulator',
-                                  style: TextStyle(color: gold, fontSize: 11, fontWeight: FontWeight.bold),
+                                Text(
+                                  _fmt(studyState.remainingSeconds),
+                                  style: const TextStyle(
+                                    color: gold,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    fontFamily: 'Courier',
+                                  ),
                                 ),
-                                const Spacer(),
-                                IconButton(
-                                  constraints: const BoxConstraints(),
-                                  padding: EdgeInsets.zero,
-                                  icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 14),
-                                  onPressed: () => setState(() => _showDevPanel = false),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.stars_rounded, color: gold, size: 12),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      '${studyState.focusScore}% Focus',
+                                      style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                            const Divider(color: Colors.white24, height: 12),
-                            _DevToggle(
-                              label: 'Face Present',
-                              value: MlSimulatorConfig.faceDetected,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.faceDetected = v),
+                            const Spacer(),
+                            // Diagnostics & Simulation button
+                            IconButton.filledTonal(
+                              onPressed: () {
+                                _showDiagnosticsBottomSheet(context);
+                              },
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white10,
+                                foregroundColor: gold,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.all(12),
+                              ),
+                              icon: const Icon(Icons.settings_suggest_rounded, size: 22),
+                              tooltip: 'Diagnostics & Simulation',
                             ),
-                            _DevToggle(
-                              label: 'Multiple Faces',
-                              value: MlSimulatorConfig.multipleFaces,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.multipleFaces = v),
-                            ),
-                            _DevToggle(
-                              label: 'Eyes Closed',
-                              value: MlSimulatorConfig.eyesClosed,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.eyesClosed = v),
-                            ),
-                            _DevToggle(
-                              label: 'Looking Away',
-                              value: MlSimulatorConfig.lookingAway,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.lookingAway = v),
-                            ),
-                            _DevToggle(
-                              label: 'Phone Present',
-                              value: MlSimulatorConfig.phonePresent,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.phonePresent = v),
-                            ),
-                            _DevToggle(
-                              label: 'Book Present',
-                              value: MlSimulatorConfig.bookPresent,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.bookPresent = v),
-                            ),
-                            _DevToggle(
-                              label: 'Laptop Present',
-                              value: MlSimulatorConfig.laptopPresent,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.laptopPresent = v),
-                            ),
-                            _DevToggle(
-                              label: 'Leave Chair',
-                              value: MlSimulatorConfig.leavingChair,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.leavingChair = v),
-                            ),
-                            _DevToggle(
-                              label: 'Slouching',
-                              value: MlSimulatorConfig.slouching,
-                              onChanged: (v) => setState(() => MlSimulatorConfig.slouching = v),
+                            const SizedBox(width: 10),
+                            // Audio FAB
+                            _AudioFab(
+                              audioService: ref.read(studyControllerProvider.notifier).audioService,
+                              onTap: _toggleAudioPanel,
                             ),
                           ],
                         ),
-                      ),
+                      ],
                     ),
-                  )
-                else
-                  Positioned(
-                    left: 16,
-                    top: 16,
-                    child: FloatingActionButton.small(
-                      backgroundColor: Colors.black87,
-                      foregroundColor: gold,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      child: const Icon(Icons.settings_suggest_rounded, size: 20),
-                      onPressed: () => setState(() => _showDevPanel = true),
-                    ),
-                  ),
-
-                // ── Status Message HUD at Top Center ─────────────────────
-                Positioned(
-                  top: 16,
-                  left: 200,
-                  right: 110,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: Text(
-                      studyState.statusMessage,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isFocused ? Colors.greenAccent : Colors.redAccent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // ── Bottom-left: End session ────────────────────────────
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  child: _EndButton(
-                    onEnd: () async {
-                      final bool? confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('End session?'),
-                          content: const Text(
-                              'Are you sure you want to end this study session?'),
-                          actions: [
-                            TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('Continue')),
-                            FilledButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                                child: const Text('End')),
-                          ],
-                        ),
-                      );
-                      if (confirm == true && mounted) {
-                        await ref.read(studyControllerProvider.notifier).stopSession();
-                      }
-                    },
                   ),
                 ),
               ],
             );
           },
         ),
+      ),
+    );
+  }
+
+  void _showDiagnosticsBottomSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF131316),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.6,
+              minChildSize: 0.4,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'AI Diagnostics & Simulation',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFFD4AF37),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Monitor real-time model confidence scores and mock camera states.',
+                        style: TextStyle(color: Colors.white38, fontSize: 12),
+                      ),
+                      const Divider(height: 32, color: Colors.white12),
+                      
+                      const Text(
+                        'LIVE MODEL CONFIDENCES',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                          color: Colors.white60,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _ConfidenceItem(
+                        label: 'Face Present',
+                        value: MlSimulatorConfig.faceConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Eyes Open',
+                        value: MlSimulatorConfig.eyesOpenConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Head Forward',
+                        value: MlSimulatorConfig.headForwardConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Posture Score',
+                        value: MlSimulatorConfig.postureConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Phone Absence',
+                        value: 1.0 - MlSimulatorConfig.phoneConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Book Detected',
+                        value: MlSimulatorConfig.bookConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Laptop Detected',
+                        value: MlSimulatorConfig.laptopConfidence,
+                      ),
+                      _ConfidenceItem(
+                        label: 'Multiple Faces Absence',
+                        value: 1.0 - MlSimulatorConfig.multipleFacesConfidence,
+                      ),
+                      const Divider(height: 32, color: Colors.white12),
+                      
+                      const Text(
+                        'DEVELOPER SIMULATION SLIDERS',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                          color: Colors.white60,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _SliderItem(
+                        label: 'Face Presence Confidence',
+                        value: MlSimulatorConfig.faceConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.faceConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Eyes Open Confidence',
+                        value: MlSimulatorConfig.eyesOpenConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.eyesOpenConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Head Forward Confidence',
+                        value: MlSimulatorConfig.headForwardConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.headForwardConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Posture Confidence',
+                        value: MlSimulatorConfig.postureConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.postureConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Phone Presence Confidence',
+                        value: MlSimulatorConfig.phoneConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.phoneConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Book Presence Confidence',
+                        value: MlSimulatorConfig.bookConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.bookConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Laptop Presence Confidence',
+                        value: MlSimulatorConfig.laptopConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.laptopConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Multiple People Confidence',
+                        value: MlSimulatorConfig.multipleFacesConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.multipleFacesConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                      _SliderItem(
+                        label: 'Leaving Chair Confidence',
+                        value: MlSimulatorConfig.leavingChairConfidence,
+                        onChanged: (v) {
+                          MlSimulatorConfig.leavingChairConfidence = v;
+                          setModalState(() {});
+                          setState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ConfidenceItem extends StatelessWidget {
+  const _ConfidenceItem({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    final int percentage = (value * 100).round().clamp(0, 100);
+    Color color = Colors.greenAccent;
+    if (percentage < 50) {
+      color = Colors.redAccent;
+    } else if (percentage < 80) {
+      color = Colors.orangeAccent;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(
+            '$percentage%',
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 80,
+            child: LinearProgressIndicator(
+              value: value,
+              backgroundColor: Colors.white10,
+              color: color,
+              minHeight: 4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SliderItem extends StatelessWidget {
+  const _SliderItem({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white60, fontSize: 11),
+              ),
+              Text(
+                '${(value * 100).toInt()}%',
+                style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: const Color(0xFFD4AF37),
+              inactiveTrackColor: Colors.white12,
+              thumbColor: const Color(0xFFD4AF37),
+              trackHeight: 2,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+            ),
+            child: Slider(
+              value: value,
+              min: 0.0,
+              max: 1.0,
+              onChanged: onChanged,
+            ),
+          ),
+        ],
       ),
     );
   }

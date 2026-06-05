@@ -290,39 +290,43 @@ class StudyController extends StateNotifier<StudyState> {
 
     _lastFocusState = isFocused;
 
-    // ── Continuous distraction grace period check (3 seconds before pausing) ──
     bool faceVisibleState = true;
-    String status = 'Studying... keep your face visible';
+    String status = 'Focused. Timer running.';
 
-    if (!metrics.faceDetected || metrics.leavingChair) {
+    // Grace periods:
+    // Face Missing > 3 sec
+    // Multiple Faces > 5 sec
+    // Phone Usage > 10 sec
+    // Eyes Closed (Sleeping) > 5 sec
+
+    if (metrics.faceMissingDuration.inSeconds > 3 || metrics.leavingChair) {
       faceVisibleState = false;
-      status = 'Face not detected. Earning paused.';
-    } else if (metrics.multipleFaces) {
+      status = 'Face not detected. Session paused.';
+    } else if (metrics.multipleFacesDuration.inSeconds > 5) {
       faceVisibleState = false;
-      status = 'Multiple faces detected! Earning paused.';
+      status = 'Multiple faces detected. Session paused.';
+    } else if (metrics.phoneDuration.inSeconds > 10) {
+      faceVisibleState = false;
+      status = 'Phone usage detected. Session paused.';
+    } else if (metrics.eyesClosedDuration.inSeconds > 5) {
+      faceVisibleState = false;
+      status = 'Sleeping detected! Sleep alert active.';
     } else if (metrics.phoneDetected) {
-      faceVisibleState = false;
-      status = 'Phone distraction detected! Earning paused.';
+      final int remaining = 10 - metrics.phoneDuration.inSeconds;
+      status = 'Phone detected! Put it away (Grace: ${remaining}s)';
+    } else if (metrics.multipleFaces) {
+      final int remaining = 5 - metrics.multipleFacesDuration.inSeconds;
+      status = 'Multiple faces! Remove others (Grace: ${remaining}s)';
+    } else if (!metrics.faceDetected) {
+      final int remaining = 3 - metrics.faceMissingDuration.inSeconds;
+      status = 'Face lost! Return to screen (Grace: ${remaining}s)';
+    } else if (metrics.eyesClosedDuration.inSeconds > 0) {
+      final int remaining = 5 - metrics.eyesClosedDuration.inSeconds;
+      status = 'Eyes closed! Wake up (Grace: ${remaining}s)';
     } else if (metrics.slouching) {
-      // Slouching does not pause the timer but warns and reduces score
       status = 'Warning: Bad posture detected!';
     } else if (!isFocused) {
-      faceVisibleState = false;
-      status = 'Low focus level. Earning paused.';
-    } else {
-      status = 'Focused. Timer running.';
-    }
-
-    // Grace period logic: Only pause if distraction/absence is continuous for >= 3 seconds
-    if (!faceVisibleState) {
-      _distractionStartTime ??= DateTime.now();
-      final int distractionMs = DateTime.now().difference(_distractionStartTime!).inMilliseconds;
-      if (distractionMs < 3000) {
-        // Within 3-second grace period: ignore failure and keep timer running
-        faceVisibleState = true;
-      }
-    } else {
-      _distractionStartTime = null;
+      status = 'Low focus level. Pay attention.';
     }
 
     state = state.copyWith(

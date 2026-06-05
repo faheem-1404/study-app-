@@ -11,6 +11,8 @@ class FocusMetrics {
     required this.headPitchAngle,
     this.eyesClosedDuration = Duration.zero,
     this.faceMissingDuration = Duration.zero,
+    this.multipleFacesDuration = Duration.zero,
+    this.phoneDuration = Duration.zero,
     
     // Upgraded ML detection fields
     this.multipleFaces = false,
@@ -47,6 +49,12 @@ class FocusMetrics {
   /// Duration face has been missing
   final Duration faceMissingDuration;
 
+  /// Duration multiple faces have been detected
+  final Duration multipleFacesDuration;
+
+  /// Duration a phone has been detected
+  final Duration phoneDuration;
+
   // Upgraded ML detection fields
   final bool multipleFaces;
   final bool phoneDetected;
@@ -75,6 +83,8 @@ class FocusMetrics {
     double? headPitchAngle,
     Duration? eyesClosedDuration,
     Duration? faceMissingDuration,
+    Duration? multipleFacesDuration,
+    Duration? phoneDuration,
     bool? multipleFaces,
     bool? phoneDetected,
     bool? bookDetected,
@@ -93,6 +103,8 @@ class FocusMetrics {
       headPitchAngle: headPitchAngle ?? this.headPitchAngle,
       eyesClosedDuration: eyesClosedDuration ?? this.eyesClosedDuration,
       faceMissingDuration: faceMissingDuration ?? this.faceMissingDuration,
+      multipleFacesDuration: multipleFacesDuration ?? this.multipleFacesDuration,
+      phoneDuration: phoneDuration ?? this.phoneDuration,
       multipleFaces: multipleFaces ?? this.multipleFaces,
       phoneDetected: phoneDetected ?? this.phoneDetected,
       bookDetected: bookDetected ?? this.bookDetected,
